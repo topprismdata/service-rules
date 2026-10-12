@@ -138,3 +138,60 @@ def aggregate(evals: list[RuleEvaluation]) -> GateDecision:
     if any(e.verdict is AdmissionAction.ALLOW_WITH_LIMITS for e in evals):
         return GateDecision(AdmissionAction.ALLOW_WITH_LIMITS, True, evals, "带限制放行")
     return GateDecision(AdmissionAction.ALLOW, True, evals, "全部放行")
+
+
+def evaluate_week(
+    rs: RuleSetVersion,
+    outlet_id: str,
+    visits: list[tuple[int, int]],   # 本周实际拜访 (weekday 1-7, slot)
+) -> list[RuleEvaluation]:
+    """周级频次聚合评估（挂账⑤补齐，2026-10-12）。
+
+    - 频次承诺：outlet 专属规则覆盖默认（"*"）规则
+    - 实访不足 → ALLOW_WITH_LIMITS（欠服务，C2 非硬门）
+    - 实访落在合同槽位外 → BLOCK（C1 硬门，相位违规）
+    - 有拜访但无合同相位记录 → REVIEW + REPAIR_REQUIRED（fail-closed 不猜测）
+    """
+    evals: list[RuleEvaluation] = []
+
+    freq_rules = [r for r in rs.rules if r.type is RuleType.VISIT_FREQUENCY
+                  and r.outlet_id in ("*", outlet_id)]
+    specific = [r for r in freq_rules if r.outlet_id == outlet_id]
+    chosen = specific or [r for r in freq_rules if r.outlet_id == "*"]
+    for f in chosen:
+        n = len(visits)
+        if n >= f.visits_per_week:
+            evals.append(RuleEvaluation(
+                f.rule_id, AdmissionAction.ALLOW, f.severity, f.hard_gate,
+                f"周实访 {n} ≥ 承诺 {f.visits_per_week}"))
+        else:
+            evals.append(RuleEvaluation(
+                f.rule_id, AdmissionAction.ALLOW_WITH_LIMITS, f.severity, f.hard_gate,
+                f"欠服务：周实访 {n} < 承诺 {f.visits_per_week}",
+                GovernanceDisposition.NONE, evidence=[f"shortfall={f.visits_per_week - n}"]))
+
+    cadence = [r for r in rs.rules if r.type is RuleType.CADENCE_SLOTS
+               and r.outlet_id in (outlet_id, "*")]
+    cad = (specific := [r for r in cadence if r.outlet_id == outlet_id]) or cadence
+    if visits and not cad:
+        evals.append(RuleEvaluation(
+            "WEEK-CADENCE-MISSING", AdmissionAction.REVIEW, Severity.C2, False,
+            "有实访但无合同相位记录 → fail-closed 不猜测",
+            GovernanceDisposition.REPAIR_REQUIRED))
+    elif visits and cad:
+        c = cad[0]
+        violations = [
+            (w, s) for (w, s) in visits
+            if w not in c.weekday_slots or s not in c.weekday_slots[w]
+        ]
+        if violations:
+            evals.append(RuleEvaluation(
+                c.rule_id, AdmissionAction.BLOCK, Severity.C1, True,
+                f"相位违规：{violations} 不在合同槽位",
+                GovernanceDisposition.QUARANTINE,
+                evidence=[f"weekday={w},slot={s}" for w, s in violations]))
+        else:
+            evals.append(RuleEvaluation(
+                c.rule_id, AdmissionAction.ALLOW, Severity.C1, True,
+                f"全部 {len(visits)} 次实访均在合同槽位"))
+    return evals

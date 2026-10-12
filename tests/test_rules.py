@@ -118,3 +118,53 @@ def test_rollback_restores_previous_version(tmp_path):
     assert rolled.supersedes == "v2"                      # 回滚链留痕
     assert store.active_version().version == "v1-rollback"
     store.close_db()
+
+
+# ---- 周级频次评估（挂账⑤补齐）----
+
+from service_rules.engine import evaluate_week
+
+
+def _cad_rule(outlet="*", slots=None, rule_id="R-CAD"):
+    return Rule(rule_id, RuleType.CADENCE_SLOTS, Severity.C1, True,
+                outlet_id=outlet, weekday_slots=slots or {1: [0, 1], 3: [0]})
+
+
+def test_week_meets_commitment():
+    rs = RuleSetVersion("v1", (_freq(3), _cad_rule()))
+    evals = evaluate_week(rs, "O1", [(1, 0), (1, 1), (3, 0)])
+    assert evals[0].verdict is AdmissionAction.ALLOW
+    assert evals[1].verdict is AdmissionAction.ALLOW  # 相位全合法
+
+
+def test_week_under_service_is_limits_not_block():
+    rs = RuleSetVersion("v1", (_freq(4), _cad_rule()))
+    evals = evaluate_week(rs, "O1", [(1, 0), (3, 0)])
+    freq = evals[0]
+    assert freq.verdict is AdmissionAction.ALLOW_WITH_LIMITS
+    assert "欠服务" in freq.measured and freq.evidence == ["shortfall=2"]
+
+
+def test_week_illegal_slot_blocks_c1():
+    rs = RuleSetVersion("v1", (_freq(2), _cad_rule()))
+    evals = evaluate_week(rs, "O1", [(1, 0), (2, 0)])  # 周二无合同槽位
+    cad = [e for e in evals if e.rule_id == "R-CAD"][0]
+    assert cad.verdict is AdmissionAction.BLOCK and cad.hard_gate
+    assert cad.disposition is GovernanceDisposition.QUARANTINE
+
+
+def test_week_visits_without_cadence_fail_closed_review():
+    rs = RuleSetVersion("v1", (_freq(2),))  # 无相位规则
+    evals = evaluate_week(rs, "O1", [(1, 0), (1, 1)])
+    miss = [e for e in evals if e.rule_id == "WEEK-CADENCE-MISSING"][0]
+    assert miss.verdict is AdmissionAction.REVIEW
+    assert miss.disposition is GovernanceDisposition.REPAIR_REQUIRED
+
+
+def test_week_outlet_specific_freq_overrides_default():
+    rs = RuleSetVersion("v1", (_freq(5, outlet="*"), _freq(2, outlet="O1", rule_id="R-F1"),
+                               _cad_rule()))
+    evals = evaluate_week(rs, "O1", [(1, 0), (3, 0)])
+    ids = [e.rule_id for e in evals]
+    assert ids == ["R-F1", "R-CAD"]           # 专属覆盖默认
+    assert evals[0].verdict is AdmissionAction.ALLOW  # 2 ≥ 2
