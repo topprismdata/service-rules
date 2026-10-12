@@ -1,0 +1,39 @@
+# service-rules
+
+服务规则库服务化（潜店雷达模块① WP07）。
+
+## 规则类型（版本化，发布后不可变）
+
+| 类型 | 语义 | 来源 |
+|---|---|---|
+| `VISIT_FREQUENCY` | 每店每周拜访次数承诺 | 计划/合同 |
+| `CADENCE_SLOTS` | 每店每星期几合法槽位集（`{weekday: [slot,...]}`） | VisitIR 合同-相位（weekday_slots 同型） |
+| `TIME_WINDOW` | 可服务时间窗 `HH:MM-HH:MM` | 运营 |
+
+## GeoGov DSL 同型
+
+- verdict = AdmissionAction 4 态（ALLOW/ALLOW_WITH_LIMITS/REVIEW/BLOCK）
+- disposition = GovernanceDisposition 5 处置
+- severity C0-C3 + hard_gate 标记；RuleEvaluation 字段同型
+- 不变量照搬：缺合同相位输入 = BLOCK（fail-closed 不猜测）；任一 C1 hard
+  gate 失败 = BLOCK 覆盖任何 ALLOW；REVIEW 永不进生产
+
+## 发布前冲突检测
+
+- F1 频次 > 合同槽位容量 → BLOCKING（C1）
+- F2 有频次承诺无相位 → BLOCKING（C1，fail-closed）
+- F3 频次显著欠合同相位 → 提示（C2，不阻断）
+- F4 时间窗配置不完整 → BLOCKING（C2）
+
+带 blocking 冲突的版本 `publish()` 拒绝；回滚 = 激活 supersedes 链上一版本
+（回滚本身也是版本事件，历史不删）。
+
+## 用法
+
+```python
+from service_rules import RuleStore, RuleSetVersion
+
+store = RuleStore("rules.db")
+store.publish(RuleSetVersion("v1", rules), activated_by="ops01")
+store.rollback(activated_by="ops02")          # 一键回滚上一版本
+```
