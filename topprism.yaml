@@ -1,0 +1,12 @@
+topprism:
+  purpose:
+    - data-governance
+  capability: service-rules-library
+  platform_layer: trusted-world-state
+  # maturity 枚举(组织级四档): specification-frozen | experiment-validated | applied-component | certified-component
+  maturity: experiment-validated
+  evidence:
+    type: automated-test-suite
+    scope: >
+      CI 5x(3.9-3.13); 10 tests incl. fail-closed evaluation, C1-override semantics, publish-time conflict detection, rollback chain.
+  customer_data_in_repo: false
