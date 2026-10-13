@@ -195,3 +195,44 @@ def evaluate_week(
                 c.rule_id, AdmissionAction.ALLOW, Severity.C1, True,
                 f"全部 {len(visits)} 次实访均在合同槽位"))
     return evals
+
+
+def evaluate_coverage(
+    rs: RuleSetVersion,
+    outlet_id: str,
+    *,
+    has_primary: bool,
+    plan_version_ref: str = "",
+) -> list[RuleEvaluation]:
+    """片区覆盖评估（WP15）：门店须有 active 主访关系且携带方案版本追溯键。
+
+    fail-closed 纪律（同 WP04/WP07）：无主=REVIEW+REPAIR_REQUIRED（空事实不猜测）；
+    有主但缺 plan_version_ref=REVIEW（#48 追溯断链）。
+    """
+    evals: list[RuleEvaluation] = []
+    rules = [r for r in rs.rules
+             if r.type is RuleType.TERRITORY_COVER
+             and r.outlet_id in ("*", outlet_id)]
+    if not rules:
+        return evals
+    # 门店专属规则覆盖通配（同 evaluate_week 语义）
+    specific = [r for r in rules if r.outlet_id == outlet_id]
+    rules = specific or rules
+    for r in rules:
+        if not has_primary:
+            evals.append(RuleEvaluation(
+                r.rule_id, AdmissionAction.REVIEW, r.severity, r.hard_gate,
+                f"门店 {outlet_id} 无 active 主访关系（片区无主）→ 不猜测",
+                GovernanceDisposition.REPAIR_REQUIRED,
+                evidence=["no_primary_relation"]))
+        elif not plan_version_ref:
+            evals.append(RuleEvaluation(
+                r.rule_id, AdmissionAction.REVIEW, r.severity, r.hard_gate,
+                "分配记录缺 plan_version_ref（#48 追溯断链）",
+                GovernanceDisposition.REPAIR_REQUIRED,
+                evidence=["missing_plan_version_ref"]))
+        else:
+            evals.append(RuleEvaluation(
+                r.rule_id, AdmissionAction.ALLOW, r.severity, r.hard_gate,
+                f"有主访+方案版本 {plan_version_ref}"))
+    return evals

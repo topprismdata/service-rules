@@ -37,3 +37,10 @@ store = RuleStore("rules.db")
 store.publish(RuleSetVersion("v1", rules), activated_by="ops01")
 store.rollback(activated_by="ops02")          # 一键回滚上一版本
 ```
+
+## 片区覆盖评估（v0.2.0，WP15）
+
+`evaluate_coverage(rs, outlet_id, has_primary=..., plan_version_ref=...)`：
+`TERRITORY_COVER` 规则 fail-closed 三态——无主访=REVIEW+REPAIR_REQUIRED（不猜测）、
+有主但缺方案版本追溯键=REVIEW（#48 断链）、双全=ALLOW；门店专属覆盖通配；
+不加入 detect_conflicts 的 F1-F4 语义（additive，自测锁定）。

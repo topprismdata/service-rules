@@ -168,3 +168,56 @@ def test_week_outlet_specific_freq_overrides_default():
     ids = [e.rule_id for e in evals]
     assert ids == ["R-F1", "R-CAD"]           # 专属覆盖默认
     assert evals[0].verdict is AdmissionAction.ALLOW  # 2 ≥ 2
+
+
+# ---- WP15 片区覆盖评估 ----
+
+from service_rules.engine import evaluate_coverage
+
+
+def _cover(outlet="*", rule_id="R-COV"):
+    return Rule(rule_id, RuleType.TERRITORY_COVER, Severity.C2, False,
+                outlet_id=outlet)
+
+
+def test_coverage_no_primary_is_review_fail_closed():
+    rs = RuleSetVersion("v1", (_cover(),))
+    evals = evaluate_coverage(rs, "O1", has_primary=False)
+    assert len(evals) == 1
+    e = evals[0]
+    assert e.verdict is AdmissionAction.REVIEW
+    assert e.disposition is GovernanceDisposition.REPAIR_REQUIRED
+    assert "no_primary_relation" in e.evidence
+
+
+def test_coverage_missing_plan_ref_is_review():
+    rs = RuleSetVersion("v1", (_cover(),))
+    e = evaluate_coverage(rs, "O1", has_primary=True)[0]
+    assert e.verdict is AdmissionAction.REVIEW
+    assert "missing_plan_version_ref" in e.evidence
+
+
+def test_coverage_primary_with_plan_ref_allows():
+    rs = RuleSetVersion("v1", (_cover(),))
+    e = evaluate_coverage(rs, "O1", has_primary=True,
+                          plan_version_ref="2027Q1#2")[0]
+    assert e.verdict is AdmissionAction.ALLOW
+
+
+def test_coverage_outlet_specific_overrides_wildcard():
+    rs = RuleSetVersion("v1", (_cover("*", "R-COV-DEF"), _cover("O9", "R-COV-O9")))
+    ids = [e.rule_id for e in evaluate_coverage(rs, "O9", has_primary=True,
+                                                plan_version_ref="B#1")]
+    assert ids == ["R-COV-O9"]
+
+
+def test_coverage_absent_rule_no_evaluation():
+    rs = RuleSetVersion("v1", (_freq(2),))
+    assert evaluate_coverage(rs, "O1", has_primary=False) == []
+
+
+def test_coverage_rule_does_not_break_conflict_detection():
+    """新规则类型加入后 F1-F4 语义不受影响（additive 变更自证）。"""
+    rs = RuleSetVersion("v1", (_freq(4), _cadence(), _cover()))
+    codes = {x.code for x in detect_conflicts(rs)}
+    assert "F1" in codes and "F2" not in codes

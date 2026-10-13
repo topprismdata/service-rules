@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "service-rules"
-version = "0.1.1"
+version = "0.2.0"
 description = "Versioned service rules (visit frequency / contract cadence-phase / time windows) with pre-publish conflict detection and GeoGov DQ DSL-typed verdicts; one-click rollback."
 readme = "README.md"
 requires-python = ">=3.9"

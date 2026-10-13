@@ -8,5 +8,5 @@ topprism:
   evidence:
     type: automated-test-suite
     scope: >
-      CI 5x(3.9-3.13); 10 tests incl. fail-closed evaluation, C1-override semantics, publish-time conflict detection, rollback chain.
+      CI 3.11+3.12; 21 tests incl. evaluate_coverage fail-closed 三态+专属覆盖通配+F1-F4 不受扰; 15 v0.1.x 全保留.
   customer_data_in_repo: false

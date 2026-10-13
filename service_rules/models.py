@@ -42,6 +42,7 @@ class RuleType(str, Enum):
     VISIT_FREQUENCY = "VISIT_FREQUENCY"      # 拜访频次：每店每周期次数
     CADENCE_SLOTS = "CADENCE_SLOTS"          # 合同-相位：每店每星期几合法槽位集
     TIME_WINDOW = "TIME_WINDOW"              # 时间窗：可服务 HH:MM-HH:MM
+    TERRITORY_COVER = "TERRITORY_COVER"      # 片区覆盖：有主访+方案版本追溯键（WP15）
 
 
 @dataclass(frozen=True)
