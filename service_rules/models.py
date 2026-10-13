@@ -43,6 +43,7 @@ class RuleType(str, Enum):
     CADENCE_SLOTS = "CADENCE_SLOTS"          # 合同-相位：每店每星期几合法槽位集
     TIME_WINDOW = "TIME_WINDOW"              # 时间窗：可服务 HH:MM-HH:MM
     TERRITORY_COVER = "TERRITORY_COVER"      # 片区覆盖：有主访+方案版本追溯键（WP15）
+    KPI_THRESHOLD = "KPI_THRESHOLD"          # 业绩指标带限 [lo,hi]（④WP28）
 
 
 @dataclass(frozen=True)
@@ -61,6 +62,10 @@ class Rule:
     # TIME_WINDOW: "HH:MM-HH:MM"
     window_start: str = ""
     window_end: str = ""
+    # KPI_THRESHOLD: 指标名 + 带限（None=该侧无界）
+    kpi: str = ""
+    kpi_lo: float | None = None
+    kpi_hi: float | None = None
     description: str = ""
 
 

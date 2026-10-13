@@ -1,6 +1,6 @@
 """service-rules: 服务规则库 (WP07) — GeoGov DSL 同型。"""
 from service_rules.engine import (GateDecision, aggregate, detect_conflicts,
-                             evaluate_outlet_day, evaluate_week, evaluate_coverage)
+                             evaluate_outlet_day, evaluate_week, evaluate_coverage, evaluate_kpi)
 from service_rules.models import (
     AdmissionAction, ConflictFinding, GovernanceDisposition, Rule,
     RuleEvaluation, RuleSetVersion, RuleType, Severity,
@@ -14,4 +14,5 @@ __all__ = [
     "Rule", "RuleEvaluation", "RuleSetVersion", "RuleStore", "RuleType",
     "Severity", "__version__", "aggregate", "detect_conflicts",
     "evaluate_outlet_day", "evaluate_week", "evaluate_coverage",
+    "evaluate_kpi",
 ]

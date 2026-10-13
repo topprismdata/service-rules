@@ -14,6 +14,8 @@
 """
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from dataclasses import dataclass
 
 from service_rules.models import (
@@ -235,4 +237,40 @@ def evaluate_coverage(
             evals.append(RuleEvaluation(
                 r.rule_id, AdmissionAction.ALLOW, r.severity, r.hard_gate,
                 f"有主访+方案版本 {plan_version_ref}"))
+    return evals
+
+
+def evaluate_kpi(
+    rs: RuleSetVersion,
+    subject_id: str,
+    facts: Mapping[str, float],
+) -> list[RuleEvaluation]:
+    """KPI 带限评估（④WP28）：越界→REVIEW（hard_gate→BLOCK）；
+    指标缺失→REVIEW+missing_kpi_fact（fail-closed，不猜测=无主覆盖同型）。"""
+    from service_rules.models import AdmissionAction, GovernanceDisposition, RuleEvaluation, RuleType, Severity
+    evals = []
+    for r in rs.rules:
+        if r.type is not RuleType.KPI_THRESHOLD:
+            continue
+        if not r.kpi:
+            evals.append(RuleEvaluation(r.rule_id, AdmissionAction.REVIEW, r.severity,
+                                        r.hard_gate, f"kpi={subject_id}:规则缺指标名",
+                                        GovernanceDisposition.REPAIR_REQUIRED))
+            continue
+        if r.kpi not in facts:
+            evals.append(RuleEvaluation(r.rule_id, AdmissionAction.REVIEW, r.severity,
+                                        r.hard_gate, f"kpi={r.kpi} 事实缺失({subject_id})",
+                                        GovernanceDisposition.REPAIR_REQUIRED))
+            continue
+        v = float(facts[r.kpi])
+        breach_lo = r.kpi_lo is not None and v < r.kpi_lo
+        breach_hi = r.kpi_hi is not None and v > r.kpi_hi
+        if breach_lo or breach_hi:
+            verdict = (AdmissionAction.BLOCK if r.hard_gate else AdmissionAction.REVIEW)
+            side = "低于下限" if breach_lo else "高于上限"
+            evals.append(RuleEvaluation(r.rule_id, verdict, r.severity, r.hard_gate,
+                                        f"kpi={r.kpi} {v} {side} [{r.kpi_lo},{r.kpi_hi}] ({subject_id})"))
+        else:
+            evals.append(RuleEvaluation(r.rule_id, AdmissionAction.ALLOW, r.severity,
+                                        r.hard_gate, f"kpi={r.kpi} {v} 带内 ({subject_id})"))
     return evals

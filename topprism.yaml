@@ -8,5 +8,6 @@ topprism:
   evidence:
     type: automated-test-suite
     scope: >
-      CI 3.11+3.12; 21 tests incl. evaluate_coverage fail-closed 三态+专属覆盖通配+F1-F4 不受扰; 15 v0.1.x 全保留.
-  customer_data_in_repo: false
+      CI 3.11+3.12; 28 tests：v0.2.x 22 项零回归 + KPI_THRESHOLD 带限
+      六项（带内 ALLOW/越界 REVIEW/hard_gate BLOCK/缺事实 fail-closed
+      REPAIR_REQUIRED/单侧无界/F1-F4 不受扰 additive 自证）。

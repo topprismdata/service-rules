@@ -232,3 +232,55 @@ def test_get_version_public_lookup(tmp_path):
     assert st.get_version("v7") is not None
     assert st.get_version("v7").version == "v7"
     assert st.get_version("nope") is None  # 未发布=None，不抛
+
+
+# ---- ④WP28: KPI 带限规则型 ----
+
+from service_rules.engine import evaluate_kpi
+
+
+def _kpi(rule_id="R-KPI", kpi="coverage_rate", lo=0.6, hi=0.95, hard=False):
+    return Rule(rule_id, RuleType.KPI_THRESHOLD, Severity.C2, hard,
+                kpi=kpi, kpi_lo=lo, kpi_hi=hi)
+
+
+def _krs(*rules):
+    return RuleSetVersion("v-k", rules)
+
+
+def test_kpi_in_band_allows():
+    e = evaluate_kpi(_krs(_kpi()), "city-GZ", {"coverage_rate": 0.8})[0]
+    assert e.verdict is AdmissionAction.ALLOW
+
+
+def test_kpi_breach_reviews():
+    e = evaluate_kpi(_krs(_kpi()), "city-GZ", {"coverage_rate": 0.5})[0]
+    assert e.verdict is AdmissionAction.REVIEW
+    assert "低于下限" in e.measured
+
+
+def test_kpi_hard_gate_blocks():
+    e = evaluate_kpi(_krs(_kpi(hard=True)), "city-GZ", {"coverage_rate": 0.99})[0]
+    assert e.verdict is AdmissionAction.BLOCK
+    assert "高于上限" in e.measured
+
+
+def test_kpi_missing_fact_fail_closed():
+    e = evaluate_kpi(_krs(_kpi()), "city-GZ", {})[0]
+    assert e.verdict is AdmissionAction.REVIEW
+    assert e.disposition is GovernanceDisposition.REPAIR_REQUIRED
+    assert "缺失" in e.measured
+
+
+def test_kpi_unbounded_side():
+    e = evaluate_kpi(_krs(_kpi(lo=None, hi=100)), "s", {"coverage_rate": 0.0})[0]
+    assert e.verdict is AdmissionAction.ALLOW  # lo=None 该侧无界
+
+
+def test_kpi_rules_do_not_disturb_f1_f4():
+    """additive 自证：KPI 规则混入不改变频次/节拍冲突检测（②TERRITORY_COVER 先例）。"""
+    rs_bad = RuleSetVersion("v", (_freq(4), _cadence(), _kpi()))
+    codes = {f.code for f in detect_conflicts(rs_bad)}
+    assert "F1" in codes and "F2" not in codes
+    rs_f2 = RuleSetVersion("v", (_freq(2), _kpi()))
+    assert any(f.code == "F2" for f in detect_conflicts(rs_f2))
