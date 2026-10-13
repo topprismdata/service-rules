@@ -92,6 +92,10 @@ class RuleStore:
         self.db.commit()
         return rolled
 
+    def get_version(self, version: str) -> RuleSetVersion | None:
+        """公开查询任意已发布版本（#22-24 方案绑定存在性闸消费；WP22）。"""
+        return self._get(version)
+
     def active_version(self) -> RuleSetVersion | None:
         row = self.db.execute("SELECT version FROM active_pointer WHERE id=1").fetchone()
         return self._get(row[0]) if row else None

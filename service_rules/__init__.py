@@ -7,7 +7,7 @@ from service_rules.models import (
 )
 from service_rules.store import RuleStore
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 __all__ = [
     "AdmissionAction", "ConflictFinding", "GateDecision", "GovernanceDisposition",

@@ -221,3 +221,14 @@ def test_coverage_rule_does_not_break_conflict_detection():
     rs = RuleSetVersion("v1", (_freq(4), _cadence(), _cover()))
     codes = {x.code for x in detect_conflicts(rs)}
     assert "F1" in codes and "F2" not in codes
+
+
+def test_get_version_public_lookup(tmp_path):
+    from service_rules.store import RuleStore
+
+    st = RuleStore(tmp_path / "r.db")
+    rs = RuleSetVersion("v7", (_freq(2), _cadence()))
+    st.publish(rs, activated_by="ops")
+    assert st.get_version("v7") is not None
+    assert st.get_version("v7").version == "v7"
+    assert st.get_version("nope") is None  # 未发布=None，不抛
